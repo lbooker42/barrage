@@ -13,7 +13,7 @@ they like) and the server sends barrage updates to satisfy their subscription's 
 <!-- fbs, not ts, but we don't have a syntax highlighter for that -->
 
 ```ts
-// Copyright 2020 Deephaven Data Labs
+// Copyright 2023-2026 Deephaven Data Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,10 +34,10 @@ enum BarrageMessageType : byte {
   /// if the msg_payload is empty.
   None = 0,
 
-  /// for session management (not-yet-used)
-  NewSessionRequest = 1,
-  RefreshSessionRequest = 2,
-  SessionInfoResponse = 3,
+  /// enum values 1 - 3 are reserved for future use
+  UNUSED_1 = 1,
+  UNUSED_2 = 2,
+  UNUSED_3 = 3,
 
   /// for subscription parsing/management (aka DoPut, DoExchange)
   BarrageSerializationOptions = 4,
@@ -62,42 +62,26 @@ table BarrageMessageWrapper {
   msg_payload: [byte];
 }
 
-/// Establish a new session.
-table NewSessionRequest {
-  /// A nested protocol version (gets delegated to handshake)
-  protocol_version: uint;
-
-  /// Arbitrary auth/handshake info.
-  payload: [byte];
-}
-
-/// Refresh the provided session.
-table RefreshSessionRequest {
-  /// this session token is only required if it is the first request of a handshake rpc stream
-  session: [byte];
-}
-
-/// Information about the current session state.
-table SessionInfoResponse {
-  /// this is the metadata header to identify this session with future requests; it must be lower-case and remain static for the life of the session
-  metadata_header: [byte];
-
-  /// this is the session_token; note that it may rotate
-  session_token: [byte];
-
-  /// a suggested time for the user to refresh the session if they do not do so earlier; value is denoted in milliseconds since epoch
-  token_refresh_deadline_ms: long;
-}
-
-/// There will always be types that cannot be easily supported over IPC. These are the options:
-///   Stringify (default) - Pretend the column is a string when sending over Arrow Flight (default)
-///   JavaSerialization   - Use java serialization; the client is responsible for the deserialization
-///   ThrowError          - Refuse to send the column and throw an internal error sharing as much detail as possible
+/// There will always be types that cannot be easily supported over IPC. While column conversion mode is no longer
+/// supported, users can more explicitly configure the encoding/decoding behavior of the server.
 enum ColumnConversionMode : byte { Stringify = 1, JavaSerialization, ThrowError }
 
+/// The Arrow IPC record batch body compression codecs (see `RecordBatch.compression` in Arrow's `Message.fbs`) that a
+/// client is able to decode. Each codec is a single bit; the bit position of each flag matches the value of the
+/// corresponding Arrow `CompressionType`, so a codec's flag is `1 << CompressionType`.
+///
+/// The underlying type leaves room for up to 64 codecs, should Arrow define more in the future.
+enum CompressionCodec : ulong (bit_flags) {
+  /// Arrow `CompressionType.LZ4_FRAME`.
+  LZ4_FRAME,
+
+  /// Arrow `CompressionType.ZSTD`.
+  ZSTD,
+}
+
 table BarrageSubscriptionOptions {
-  /// see enum for details
-  column_conversion_mode: ColumnConversionMode = Stringify;
+  /// Column conversion mode is no longer supported.
+  column_conversion_mode: ColumnConversionMode = Stringify (deprecated);
 
   /// Deephaven reserves a value in the range of primitives as a custom NULL value. This enables more efficient transmission
   /// by eliminating the additional complexity of the validity buffer.
@@ -112,12 +96,34 @@ table BarrageSubscriptionOptions {
   /// Specify a preferred batch size. Server is allowed to be configured to restrict possible values. Too small of a
   /// batch size may be dominated with header costs as each batch is wrapped into a separate RecordBatch. Too large of
   /// a payload and it may not fit within the maximum payload size. A good default might be 4096.
+  ///
+  /// a batch_size of -1 indicates that the server should avoid batching a single logical message
   batch_size: int;
 
   /// Specify a maximum allowed message size. Server will enforce this limit by reducing batch size (to a lower limit
   /// of one row per batch). If the message size limit cannot be met due to large row sizes, the server will throw a
   /// `Status.RESOURCE_EXHAUSTED` exception
   max_message_size: int;
+
+  /// If true, the server will wrap columns with a list. This is useful for clients that do not support modified batches
+  /// with columns of differing lengths.
+  columns_as_list: bool;
+
+  /// The maximum length of any list / array to encode.
+  /// - If zero, list lengths will not be limited.
+  /// - If non-zero, the server will limit the length of any encoded list / array to the absolute value of the returned length.
+  /// - If less than zero, the server will encode elements from the end of the list / array, rather than from the beginning.
+  ///
+  /// Note: The server is unable to indicate when truncation occurs. To detect truncation request one more element than
+  /// the maximum number you wish to display.
+  preview_list_length_limit: long = 0;
+
+  /// The set of record batch body compression codecs that this client is able to decode. The server may compress the
+  /// record batches it sends using any one of these codecs, or may choose not to compress them at all.
+  ///
+  /// Note: if not supplied (default of zero) then the client is assumed to be unable to decode any compressed record
+  /// batch, and the server must send uncompressed record batches.
+  supported_compression_codecs: CompressionCodec;
 }
 
 /// Describes the subscription the client would like to acquire.
@@ -138,11 +144,15 @@ table BarrageSubscriptionRequest {
   /// When this is set the viewport RowSet will be inverted against the length of the table. That is to say
   /// every position value is converted from `i` to `n - i - 1` if the table has `n` rows.
   reverse_viewport: bool;
+
+  /// If this is set, the server will parrot this subscription token in the response. This token can be used to identify
+  /// which subscription the server is now respecting.
+  subscription_token: [byte];
 }
 
 table BarrageSnapshotOptions {
-  /// see enum for details
-  column_conversion_mode: ColumnConversionMode = Stringify;
+  /// Column conversion mode is no longer supported.
+  column_conversion_mode: ColumnConversionMode = Stringify (deprecated);
 
   /// Deephaven reserves a value in the range of primitives as a custom NULL value. This enables more efficient transmission
   /// by eliminating the additional complexity of the validity buffer.
@@ -157,6 +167,22 @@ table BarrageSnapshotOptions {
   /// of one row per batch). If the message size limit cannot be met due to large row sizes, the server will throw a
   /// `Status.RESOURCE_EXHAUSTED` exception
   max_message_size: int;
+
+  /// The maximum length of any list / array to encode.
+  /// - If zero, list lengths will not be limited.
+  /// - If non-zero, the server will limit the length of any encoded list / array to the absolute value of the returned length.
+  /// - If less than zero, the server will encode elements from the end of the list / array, rather than from the beginning.
+  ///
+  /// Note: The server is unable to indicate when truncation occurs. To detect truncation request one more element than
+  /// the maximum number you wish to display.
+  preview_list_length_limit: long = 0;
+
+  /// The set of record batch body compression codecs that this client is able to decode. The server may compress the
+  /// record batches it sends using any one of these codecs, or may choose not to compress them at all.
+  ///
+  /// Note: if not supplied (default of zero) then the client is assumed to be unable to decode any compressed record
+  /// batch, and the server must send uncompressed record batches.
+  supported_compression_codecs: CompressionCodec;
 }
 
 /// Describes the snapshot the client would like to acquire.
@@ -242,5 +268,8 @@ table BarrageUpdateMetadata {
 
   /// The list of modified column data are in the same order as the field nodes on the schema.
   mod_column_nodes: [BarrageModColumnMetadata];
+
+  /// The current size of the table.
+  table_size: long;
 }
 ```
