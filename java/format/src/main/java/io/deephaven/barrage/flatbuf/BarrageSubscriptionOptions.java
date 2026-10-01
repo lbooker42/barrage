@@ -83,6 +83,14 @@ public final class BarrageSubscriptionOptions extends Table {
    * the maximum number you wish to display.
    */
   public long previewListLengthLimit() { int o = __offset(16); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
+  /**
+   * The set of record batch body compression codecs that this client is able to decode. The server may compress the
+   * record batches it sends using any one of these codecs, or may choose not to compress them at all.
+   *
+   * Note: if not supplied (default of zero) then the client is assumed to be unable to decode any compressed record
+   * batch, and the server must send uncompressed record batches.
+   */
+  public long supportedCompressionCodecs() { int o = __offset(18); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
 
   public static int createBarrageSubscriptionOptions(FlatBufferBuilder builder,
       boolean useDeephavenNulls,
@@ -90,8 +98,10 @@ public final class BarrageSubscriptionOptions extends Table {
       int batchSize,
       int maxMessageSize,
       boolean columnsAsList,
-      long previewListLengthLimit) {
-    builder.startTable(7);
+      long previewListLengthLimit,
+      long supportedCompressionCodecs) {
+    builder.startTable(8);
+    BarrageSubscriptionOptions.addSupportedCompressionCodecs(builder, supportedCompressionCodecs);
     BarrageSubscriptionOptions.addPreviewListLengthLimit(builder, previewListLengthLimit);
     BarrageSubscriptionOptions.addMaxMessageSize(builder, maxMessageSize);
     BarrageSubscriptionOptions.addBatchSize(builder, batchSize);
@@ -101,13 +111,14 @@ public final class BarrageSubscriptionOptions extends Table {
     return BarrageSubscriptionOptions.endBarrageSubscriptionOptions(builder);
   }
 
-  public static void startBarrageSubscriptionOptions(FlatBufferBuilder builder) { builder.startTable(7); }
+  public static void startBarrageSubscriptionOptions(FlatBufferBuilder builder) { builder.startTable(8); }
   public static void addUseDeephavenNulls(FlatBufferBuilder builder, boolean useDeephavenNulls) { builder.addBoolean(1, useDeephavenNulls, false); }
   public static void addMinUpdateIntervalMs(FlatBufferBuilder builder, int minUpdateIntervalMs) { builder.addInt(2, minUpdateIntervalMs, 0); }
   public static void addBatchSize(FlatBufferBuilder builder, int batchSize) { builder.addInt(3, batchSize, 0); }
   public static void addMaxMessageSize(FlatBufferBuilder builder, int maxMessageSize) { builder.addInt(4, maxMessageSize, 0); }
   public static void addColumnsAsList(FlatBufferBuilder builder, boolean columnsAsList) { builder.addBoolean(5, columnsAsList, false); }
   public static void addPreviewListLengthLimit(FlatBufferBuilder builder, long previewListLengthLimit) { builder.addLong(6, previewListLengthLimit, 0L); }
+  public static void addSupportedCompressionCodecs(FlatBufferBuilder builder, long supportedCompressionCodecs) { builder.addLong(7, supportedCompressionCodecs, 0L); }
   public static int endBarrageSubscriptionOptions(FlatBufferBuilder builder) {
     int o = builder.endTable();
     return o;

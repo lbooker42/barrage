@@ -1,4 +1,4 @@
-// Copyright 2023 Deephaven Data Labs
+// Copyright 2023-2026 Deephaven Data Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,6 +51,19 @@ table BarrageMessageWrapper {
 /// supported, users can more explicitly configure the encoding/decoding behavior of the server.
 enum ColumnConversionMode : byte { Stringify = 1, JavaSerialization, ThrowError }
 
+/// The Arrow IPC record batch body compression codecs (see `RecordBatch.compression` in Arrow's `Message.fbs`) that a
+/// client is able to decode. Each codec is a single bit; the bit position of each flag matches the value of the
+/// corresponding Arrow `CompressionType`, so a codec's flag is `1 << CompressionType`.
+///
+/// The underlying type leaves room for up to 64 codecs, should Arrow define more in the future.
+enum CompressionCodec : ulong (bit_flags) {
+  /// Arrow `CompressionType.LZ4_FRAME`.
+  LZ4_FRAME,
+
+  /// Arrow `CompressionType.ZSTD`.
+  ZSTD,
+}
+
 table BarrageSubscriptionOptions {
   /// Column conversion mode is no longer supported.
   column_conversion_mode: ColumnConversionMode = Stringify (deprecated);
@@ -89,6 +102,13 @@ table BarrageSubscriptionOptions {
   /// Note: The server is unable to indicate when truncation occurs. To detect truncation request one more element than
   /// the maximum number you wish to display.
   preview_list_length_limit: long = 0;
+
+  /// The set of record batch body compression codecs that this client is able to decode. The server may compress the
+  /// record batches it sends using any one of these codecs, or may choose not to compress them at all.
+  ///
+  /// Note: if not supplied (default of zero) then the client is assumed to be unable to decode any compressed record
+  /// batch, and the server must send uncompressed record batches.
+  supported_compression_codecs: CompressionCodec;
 }
 
 /// Describes the subscription the client would like to acquire.
@@ -141,6 +161,13 @@ table BarrageSnapshotOptions {
   /// Note: The server is unable to indicate when truncation occurs. To detect truncation request one more element than
   /// the maximum number you wish to display.
   preview_list_length_limit: long = 0;
+
+  /// The set of record batch body compression codecs that this client is able to decode. The server may compress the
+  /// record batches it sends using any one of these codecs, or may choose not to compress them at all.
+  ///
+  /// Note: if not supplied (default of zero) then the client is assumed to be unable to decode any compressed record
+  /// batch, and the server must send uncompressed record batches.
+  supported_compression_codecs: CompressionCodec;
 }
 
 /// Describes the snapshot the client would like to acquire.

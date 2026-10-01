@@ -69,13 +69,23 @@ public final class BarrageSnapshotOptions extends Table {
    * the maximum number you wish to display.
    */
   public long previewListLengthLimit() { int o = __offset(12); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
+  /**
+   * The set of record batch body compression codecs that this client is able to decode. The server may compress the
+   * record batches it sends using any one of these codecs, or may choose not to compress them at all.
+   *
+   * Note: if not supplied (default of zero) then the client is assumed to be unable to decode any compressed record
+   * batch, and the server must send uncompressed record batches.
+   */
+  public long supportedCompressionCodecs() { int o = __offset(14); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
 
   public static int createBarrageSnapshotOptions(FlatBufferBuilder builder,
       boolean useDeephavenNulls,
       int batchSize,
       int maxMessageSize,
-      long previewListLengthLimit) {
-    builder.startTable(5);
+      long previewListLengthLimit,
+      long supportedCompressionCodecs) {
+    builder.startTable(6);
+    BarrageSnapshotOptions.addSupportedCompressionCodecs(builder, supportedCompressionCodecs);
     BarrageSnapshotOptions.addPreviewListLengthLimit(builder, previewListLengthLimit);
     BarrageSnapshotOptions.addMaxMessageSize(builder, maxMessageSize);
     BarrageSnapshotOptions.addBatchSize(builder, batchSize);
@@ -83,11 +93,12 @@ public final class BarrageSnapshotOptions extends Table {
     return BarrageSnapshotOptions.endBarrageSnapshotOptions(builder);
   }
 
-  public static void startBarrageSnapshotOptions(FlatBufferBuilder builder) { builder.startTable(5); }
+  public static void startBarrageSnapshotOptions(FlatBufferBuilder builder) { builder.startTable(6); }
   public static void addUseDeephavenNulls(FlatBufferBuilder builder, boolean useDeephavenNulls) { builder.addBoolean(1, useDeephavenNulls, false); }
   public static void addBatchSize(FlatBufferBuilder builder, int batchSize) { builder.addInt(2, batchSize, 0); }
   public static void addMaxMessageSize(FlatBufferBuilder builder, int maxMessageSize) { builder.addInt(3, maxMessageSize, 0); }
   public static void addPreviewListLengthLimit(FlatBufferBuilder builder, long previewListLengthLimit) { builder.addLong(4, previewListLengthLimit, 0L); }
+  public static void addSupportedCompressionCodecs(FlatBufferBuilder builder, long supportedCompressionCodecs) { builder.addLong(5, supportedCompressionCodecs, 0L); }
   public static int endBarrageSnapshotOptions(FlatBufferBuilder builder) {
     int o = builder.endTable();
     return o;
